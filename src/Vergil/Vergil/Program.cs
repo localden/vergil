@@ -40,61 +40,76 @@ namespace Vergil
                 {
                     var currentPage = Regex.Match(pointer.QualifiedId, "(page([0-9]+){1})", RegexOptions.IgnoreCase).Groups[2].Value;
 
-                    HttpResponseMessage pageData = await DataClient.GetAsync(pointer.QualifiedId);
-                    if (pageData.IsSuccessStatusCode)
+                    try
                     {
-                        var packageReferences = JsonSerializer.Deserialize<Catalog>(await pageData.Content.ReadAsStringAsync(), SerializerOptions);
-                        if (packageReferences.Items != null && packageReferences.Items.Any())
+                        HttpResponseMessage pageData = await DataClient.GetAsync(pointer.QualifiedId);
+                        if (pageData.IsSuccessStatusCode)
                         {
-                            Parallel.ForEach(packageReferences.Items, new ParallelOptions { MaxDegreeOfParallelism = 5 }, async packageReference =>
+                            var packageReferences = JsonSerializer.Deserialize<Catalog>(await pageData.Content.ReadAsStringAsync(), SerializerOptions);
+                            if (packageReferences.Items != null && packageReferences.Items.Any())
                             {
-                                HttpResponseMessage packageData = await DataClient.GetAsync(packageReference.QualifiedId);
-                                if (packageData.IsSuccessStatusCode)
+                                Parallel.ForEach(packageReferences.Items, new ParallelOptions { MaxDegreeOfParallelism = 5 }, async packageReference =>
                                 {
-                                    var packageString = await packageData.Content.ReadAsStringAsync();
-
-                                    if (!string.IsNullOrWhiteSpace(packageString))
+                                    try
                                     {
-                                            var command = Connection.CreateCommand();
-                                            command.CommandText =
-                                            @"
+                                        HttpResponseMessage packageData = await DataClient.GetAsync(packageReference.QualifiedId);
+                                        if (packageData.IsSuccessStatusCode)
+                                        {
+                                            var packageString = await packageData.Content.ReadAsStringAsync();
+
+                                            if (!string.IsNullOrWhiteSpace(packageString))
+                                            {
+                                                var command = Connection.CreateCommand();
+                                                command.CommandText =
+                                                @"
                                             INSERT INTO PackageData (ResponseBody) VALUES ($data)
                                             ";
-                                            command.Parameters.AddWithValue("data", packageString);
+                                                command.Parameters.AddWithValue("data", packageString);
 
-                                            try
-                                            {
-                                                int queryResult = command.ExecuteNonQuery();
-                                                if (queryResult > 0)
+                                                try
                                                 {
-                                                    Console.WriteLine($"[{currentPage}/{maxPage}] Inserted data for {packageReference.NuGetId} @ {packageReference.NuGetVersion}.");
+                                                    int queryResult = command.ExecuteNonQuery();
+                                                    if (queryResult > 0)
+                                                    {
+                                                        Console.WriteLine($"[{currentPage}/{maxPage}] Inserted data for {packageReference.NuGetId} @ {packageReference.NuGetVersion}.");
+                                                    }
+                                                    else
+                                                    {
+                                                        Console.WriteLine($"[{currentPage}/{maxPage}] Did not insert data for {packageReference.NuGetId} @ {packageReference.NuGetVersion}.");
+                                                    }
                                                 }
-                                                else
+                                                catch (Exception ex)
                                                 {
-                                                    Console.WriteLine($"[{currentPage}/{maxPage}] Did not insert data for {packageReference.NuGetId} @ {packageReference.NuGetVersion}.");
+                                                    Console.WriteLine($"[{currentPage}/{maxPage}] Error inserting {packageReference.NuGetId} @ {packageReference.NuGetVersion}. {ex.Message}");
                                                 }
+
                                             }
-                                            catch (Exception ex)
-                                            {
-                                                Console.WriteLine($"[{currentPage}/{maxPage}] Error inserting {packageReference.NuGetId} @ {packageReference.NuGetVersion}. {ex.Message}");
-                                            }
-                                        
+                                        }
+                                        else
+                                        {
+                                            Console.WriteLine($"[{currentPage}/{maxPage}] Package data acquisition not successful for {packageReference.QualifiedId}.");
+                                        }
                                     }
-                                }
-                                else
-                                {
-                                    Console.WriteLine($"[{currentPage}/{maxPage}] Package data acquisition not successful for {packageReference.QualifiedId}.");
-                                }
-                            });
+                                    catch (Exception ex)
+                                    {
+                                        Console.WriteLine($"[{currentPage}/{maxPage}] Failure for {packageReference} acquisition. {ex.Message}");
+                                    }
+
+                                });
+                            }
+                            else
+                            {
+                                Console.WriteLine($"[{currentPage}/{maxPage}] No packages in {pointer.Id}");
+                            }
                         }
                         else
                         {
-                            Console.WriteLine($"[{currentPage}/{maxPage}] No packages in {pointer.Id}");
+                            Console.WriteLine($"[{currentPage}/{maxPage}] Page data acquisition not successful for {pointer.QualifiedId}.");
                         }
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        Console.WriteLine($"[{currentPage}/{maxPage}] Page data acquisition not successful for {pointer.QualifiedId}.");
+                        Console.WriteLine($"[{currentPage}/{maxPage}] Failure for {pointer.QualifiedId} acquisition. {ex.Message}");
                     }
                 }
                 return true;
