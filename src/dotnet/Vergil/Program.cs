@@ -10,7 +10,7 @@ namespace Vergil
         static readonly string NuGetFullFeedUrl = "https://api.nuget.org/v3/catalog0/index.json";
         static readonly HttpClient DataClient = new();
         static readonly JsonSerializerOptions SerializerOptions = new() { PropertyNameCaseInsensitive = true };
-        static readonly SqliteConnection Connection = new SqliteConnection(@"DataSource=C:\Users\ddelimarsky\Downloads\nugetdb.db");
+        static readonly SqliteConnection Connection = new SqliteConnection(@"DataSource=D:\vergil-analysis.db");
 
         static async Task Main(string[] args)
         {
